@@ -1,0 +1,14 @@
+[
+  {
+    "id": "game0",
+    "title": "Neon ",
+    "description": "Il classico Pong, ma generato interamente da un singolo prompt per testare la fisica base.",
+    "date": "2023-10-01"
+  },
+  {
+    "id": "game1",
+    "title": "AI Snake",
+    "description": "Snake scritto in canvas. Volevo vedere se l'IA gestiva bene le collisioni della coda.",
+    "date": "2023-10-15"
+  }
+]
