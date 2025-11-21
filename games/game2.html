@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Sailing Dread: Final Graphic</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.min.js"></script>
+    <style>
+        body { 
+            margin: 0; padding: 0; overflow: hidden; 
+            background: #020406; /* Nero profondo */
+            font-family: 'Courier New', Courier, monospace;
+            touch-action: none; user-select: none; -webkit-user-select: none;
+        }
+        canvas { display: block; }
+        
+        /* UI HUD */
+        #ui {
+            position: absolute; top: 15px; left: 15px;
+            color: #aaccff;
+            text-shadow: 0 0 8px rgba(0, 200, 255, 0.5);
+            font-size: 14px; pointer-events: none; z-index: 10;
+            background: rgba(0,0,0,0.3);
+            padding: 10px; border-radius: 8px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .stat span { font-weight: bold; color: #ffb74d; }
+        
+        /* MESSAGGIO CENTRALE */
+        #message {
+            position: absolute; top: 25%; width: 100%;
+            text-align: center; color: #fff;
+            font-size: 22px; font-weight: bold; letter-spacing: 2px;
+            text-shadow: 0 0 15px #ff5500;
+            opacity: 0; transition: opacity 0.5s; pointer-events: none; z-index: 20;
+        }
+
+        /* BOTTONI MOBILE STILIZZATI */
+        .controls-area {
+            position: absolute; bottom: 20px; width: 100%; height: 160px;
+            pointer-events: none; display: flex; justify-content: space-between;
+            padding: 0 25px; box-sizing: border-box; z-index: 50;
+        }
+        .btn-group { pointer-events: auto; display: flex; gap: 20px; align-items: flex-end; }
+        .btn {
+            width: 75px; height: 75px;
+            background: rgba(20, 30, 40, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%; color: rgba(255,255,255,0.8);
+            font-size: 28px; display: flex; justify-content: center; align-items: center;
+            backdrop-filter: blur(4px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+            transition: transform 0.1s, background 0.1s;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .btn:active { transform: scale(0.9); background: rgba(255,255,255,0.1); border-color: #fff; }
+        #btn-fire { 
+            border-color: #ff4444; color: #ff4444; 
+            width: 85px; height: 85px;
+            background: rgba(50, 10, 10, 0.6);
+        }
+        #btn-fire:active { background: rgba(150, 20, 20, 0.6); box-shadow: 0 0 20px #ff0000; }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <div>CLASSE: <span id="shipClass">Zattera</span></div>
+    <div>CANNONI: <span id="cannons">5</span></div>
+    <div>SCAFO: <span id="hp">100</span>%</div>
+    <div style="margin-top:5px; font-size:10px; color:#778899">VENTO: <span id="windDir">N</span></div>
+</div>
+
+<div id="message">NAVE DISTRUTTA</div>
+
+<div class="controls-area">
+    <div class="btn-group">
+        <div class="btn" id="btn-left">◄</div>
+        <div class="btn" id="btn-right">►</div>
+    </div>
+    <div class="btn-group">
+        <div class="btn" id="btn-sail">▲<div style="font-size:10px; position:absolute; bottom:15px;">Vele</div></div>
+        <div class="btn" id="btn-fire">●</div>
+    </div>
+</div>
+
+<script>
+/* --- INPUT SYSTEM --- */
+const input = { left: false, right: false, sail: false, fire: false };
+function bindTouch(id, key) {
+    const el = document.getElementById(id);
+    const on = (e) => { e.preventDefault(); input[key] = true; };
+    const off = (e) => { e.preventDefault(); input[key] = false; };
+    ['touchstart', 'mousedown'].forEach(evt => el.addEventListener(evt, on));
+    ['touchend', 'mouseup', 'mouseleave'].forEach(evt => el.addEventListener(evt, off));
+}
+
+/* --- GAME ENGINE --- */
+let player, ships = [], bullets = [], particles = [];
+let wind, time = 0, stormLevel = 0;
+
+const TYPES = {
+    ZATTERA: { n:"Zattera", hp:100, w:24, h:35, col:'#8d6e63', spd:0.9 },
+    GOLETTA: { n:"Goletta", hp:150, w:20, h:55, col:'#d84315', spd:1.1 },
+    GALEONE: { n:"Galeone", hp:250, w:34, h:70, col:'#3e2723', spd:0.8 },
+    FREGATA: { n:"Fregata", hp:400, w:28, h:85, col:'#263238', spd:1.0 }
+};
+
+function setup() {
+    pixelDensity(1); // Importante per performance mobile
+    createCanvas(windowWidth, windowHeight);
+    
+    // Avvia input
+    bindTouch('btn-left', 'left');
+    bindTouch('btn-right', 'right');
+    bindTouch('btn-sail', 'sail');
+    bindTouch('btn-fire', 'fire');
+    
+    player = new Ship(0, 0, true);
+    wind = p5.Vector.fromAngle(random(TWO_PI));
+    
+    // Spawn Iniziale
+    for(let i=0; i<8; i++) spawnShip(true);
+}
+
+function draw() {
+    time += 0.004;
+    stormLevel = noise(time * 0.5); // 0 = Calmo, 1 = Tempesta
+    wind.rotate(map(noise(time),0,1,-0.01,0.01));
+    
+    // SFONDO OCEANO
+    background(5, 10, 20);
+    
+    push();
+    translate(width/2 - player.pos.x, height/2 - player.pos.y);
+    
+    // 1. DISEGNA ACQUA (Effetto Dredge)
+    drawWater();
+    
+    // 2. GESTIONE ENTITÀ
+    updateEntities();
+    
+    pop();
+    
+    // 3. EFFETTI OVERLAY (Lanterna & Meteo)
+    drawAtmosphere();
+    
+    // 4. UI
+    updateUI();
+}
+
+/* --- LOGIC & GRAPHICS --- */
+
+function drawWater() {
+    strokeWeight(2);
+    let grid = 150;
+    let pX = player.pos.x;
+    let pY = player.pos.y;
+    
+    // Calcola l'area visibile per non disegnare tutto l'infinito
+    let startX = Math.floor((pX - width)/grid)*grid;
+    let startY = Math.floor((pY - height)/grid)*grid;
+    
+    for(let x = startX; x < startX + width*2.5; x+=grid) {
+        for(let y = startY; y < startY + height*2.5; y+=grid) {
+            // Rumore per animare le onde
+            let n = noise(x*0.005, y*0.005, time);
+            
+            // Colore onda (più chiaro sulle creste)
+            let alpha = map(n, 0, 1, 10, 60);
+            stroke(100, 180, 255, alpha);
+            
+            // Piccole linee che seguono il vento
+            let waveX = x + map(n, 0, 1, -20, 20);
+            let waveY = y + map(n, 0, 1, -20, 20);
+            
+            // Disegna solo se vicino allo schermo
+            if(dist(pX, pY, waveX, waveY) < width) {
+                line(waveX, waveY, waveX + wind.x*20, waveY + wind.y*20);
+            }
+        }
+    }
+}
+
+function drawAtmosphere() {
+    let ctx = drawingContext;
+    
+    // VIGNETTA / LANTERNA
+    // Crea un gradiente radiale centrato sullo schermo
+    let grad = ctx.createRadialGradient(width/2, height/2, 50, width/2, height/2, max(width, height)/1.2);
+    
+    // Luce calda al centro (Lanterna), poi blu notte, poi nero ai bordi
+    grad.addColorStop(0, "rgba(255, 200, 100, 0.1)"); 
+    grad.addColorStop(0.3, "rgba(10, 20, 30, 0.3)");
+    grad.addColorStop(1, "rgba(0, 0, 0, 0.95)");
+    
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, width, height);
+    
+    // PIOGGIA (Se tempesta)
+    if(stormLevel > 0.5) {
+        stroke(200, 200, 255, 100 * (stormLevel-0.4));
+        strokeWeight(1);
+        for(let i=0; i<40; i++) {
+            let rx = random(width);
+            let ry = random(height);
+            line(rx, ry, rx - wind.x*15, ry - wind.y*15);
+        }
+    }
+}
+
+function updateEntities() {
+    // SCIE E PARTICELLE
+    for(let i=particles.length-1; i>=0; i--) {
+        let p = particles[i];
+        p.life -= p.decay;
+        p.pos.add(p.vel);
+        
+        noStroke();
+        if(p.type === 'wake') fill(255, p.life/2);
+        else if(p.type === 'fire') fill(255, p.life, 0, p.life);
+        else fill(200, p.life); // smoke
+        
+        ellipse(p.pos.x, p.pos.y, p.size);
+        if(p.life <= 0) particles.splice(i,1);
+    }
+    
+    // PROIETTILI
+    for(let i=bullets.length-1; i>=0; i--) {
+        let b = bullets[i];
+        b.pos.add(b.vel);
+        b.life--;
+        
+        // Scia proiettile
+        if(frameCount%3==0) particles.push({pos:b.pos.copy(), vel:createVector(0,0), life:100, decay:10, size:3, type:'smoke'});
+        
+        fill(255); noStroke(); ellipse(b.pos.x, b.pos.y, 6);
+        
+        if(b.life<=0) bullets.splice(i,1);
+    }
+    
+    // NAVI
+    let allShips = [player, ...ships];
+    for(let i=allShips.length-1; i>=0; i--) {
+        let s = allShips[i];
+        if(s.dead) continue;
+        
+        s.update();
+        s.draw();
+        
+        // Logica AI e Collisioni (solo se non è una copia morta)
+        if(s !== player) {
+             s.ai();
+             // Hit player -> enemy
+             checkCollisions(player, s);
+        }
+    }
+    
+    // Pulisci navi morte array nemici
+    for(let i=ships.length-1; i>=0; i--) {
+        if(ships[i].dead) {
+            ships.splice(i,1);
+            setTimeout(() => spawnShip(), 2000);
+        }
+    }
+    
+    // Hit enemy -> player
+    for(let s of ships) checkCollisions(s, player);
+}
+
+function checkCollisions(shooter, target) {
+    for(let i=bullets.length-1; i>=0; i--) {
+        let b = bullets[i];
+        if(b.owner === shooter && dist(b.pos.x, b.pos.y, target.pos.x, target.pos.y) < target.type.w) {
+            // HIT
+            target.hp -= 10;
+            particles.push({pos:b.pos.copy(), vel:p5.Vector.random2D(), life:255, decay:15, size:10, type:'fire'});
+            bullets.splice(i,1);
+            
+            if(target.hp <= 0) {
+                target.dead = true;
+                // Esplosione grossa
+                for(let k=0; k<10; k++) particles.push({pos:target.pos.copy(), vel:p5.Vector.random2D().mult(3), life:255, decay:5, size:random(10,30), type:'fire'});
+                
+                if(target === player) {
+                    // Game Over (Restart brutale)
+                    alert("SEI AFFONDATO. Ricarica per riprovare.");
+                    location.reload();
+                } else {
+                    // Level up player
+                    player.cannons++;
+                    player.hp = min(player.hp + 30, player.type.hp);
+                    player.evolve();
+                    showMessage(`Nave nemica affondata!`);
+                }
+            }
+        }
+    }
+}
+
+/* --- CLASS --- */
+class Ship {
+    constructor(x, y, isP) {
+        this.pos = createVector(x, y);
+        this.vel = createVector(0,0);
+        this.ang = random(TWO_PI);
+        this.isP = isP;
+        this.cannons = isP ? 5 : (random()<0.5 ? 5:10);
+        this.flag = isP ? 1 : (random()>0.6 ? 1 : 2); // 1=Alleato, 2=Pirata
+        this.sail = 0;
+        this.lastShot = 0;
+        this.evolve();
+    }
+    
+    evolve() {
+        if(this.cannons >= 20) this.type = TYPES.FREGATA;
+        else if(this.cannons >= 15) this.type = TYPES.GALEONE;
+        else if(this.cannons >= 10) this.type = TYPES.GOLETTA;
+        else this.type = TYPES.ZATTERA;
+        if(!this.isP) this.hp = this.type.hp; // Reset HP nemici al spawn/evolve
+    }
+    
+    update() {
+        // Fisica Vento
+        let head = p5.Vector.fromAngle(this.ang);
+        let angleDiff = head.angleBetween(wind);
+        let eff = map(cos(angleDiff), -1, 1, 0.4, 1.3); // Vento contro/favore
+        
+        let force = head.copy().mult(this.sail * 0.2 * eff * this.type.spd);
+        this.vel.add(force);
+        this.vel.mult(0.96); // Attrito
+        this.pos.add(this.vel);
+        
+        // Input
+        if(this.isP) {
+            if(input.left) this.ang -= 0.05;
+            if(input.right) this.ang += 0.05;
+            if(input.sail) this.sail = min(this.sail+0.05, 1);
+            else this.sail = max(this.sail-0.02, 0);
+            
+            if(input.fire && millis() - this.lastShot > 800) {
+                this.shoot();
+                this.lastShot = millis();
+            }
+        }
+        
+        // Scia
+        if(this.vel.mag() > 1 && frameCount%10==0) {
+             particles.push({pos:this.pos.copy(), vel:createVector(0,0), life:150, decay:3, size:random(5,10), type:'wake'});
+        }
+    }
+    
+    shoot() {
+        let count = Math.ceil(this.cannons/4);
+        for(let s=-1; s<=1; s+=2) { // Destra e Sinistra
+            for(let i=0; i<count; i++) {
+                let a = this.ang + (HALF_PI*s) + random(-0.15, 0.15);
+                let p = this.pos.copy().add(p5.Vector.fromAngle(this.ang).mult(random(-10,10)));
+                bullets.push({pos:p, vel:p5.Vector.fromAngle(a).mult(9), owner:this, life:50});
+                // Fumo sparo
+                particles.push({pos:p.copy(), vel:p5.Vector.fromAngle(a).mult(2), life:100, decay:10, size:8, type:'smoke'});
+            }
+        }
+    }
+    
+    ai() {
+        let d = p5.Vector.dist(this.pos, player.pos);
+        if(d > 2000) { this.dead = true; return; } // Despawn
+        
+        if(this.flag == player.flag) {
+            this.sail = 0.4;
+            this.ang += noise(this.pos.x) - 0.5; // Gira a caso
+        } else {
+            // Nemico
+            let angleTo = p5.Vector.sub(player.pos, this.pos).heading();
+            let strong = this.cannons >= player.cannons;
+            
+            // Sterzata smooth
+            let targetAng = strong ? angleTo : angleTo + PI;
+            let diff = targetAng - this.ang;
+            if (diff > PI) diff -= TWO_PI;
+            if (diff < -PI) diff += TWO_PI;
+            this.ang += diff * 0.04;
+            
+            this.sail = 1;
+            
+            if(strong && d < 400 && millis() - this.lastShot > 1500) {
+                this.shoot();
+                this.lastShot = millis();
+            }
+        }
+    }
+    
+    draw() {
+        push();
+        translate(this.pos.x, this.pos.y);
+        rotate(this.ang);
+        
+        // Ombra
+        fill(0, 100); noStroke();
+        rectMode(CENTER);
+        rect(5, 5, this.type.h, this.type.w, 10);
+        
+        // Scafo
+        fill(this.type.col); stroke(0); strokeWeight(1);
+        if(this.type.n === "Goletta") triangle(this.type.h/2, 0, -this.type.h/2, -this.type.w/2, -this.type.h/2, this.type.w/2);
+        else if(this.type.n === "Galeone") { rect(0,0,this.type.h,this.type.w,15); rect(-10,0,20,this.type.w-5); }
+        else rect(0,0,this.type.h,this.type.w, 5);
+        
+        // Bandiera
+        fill(this.flag === 1 ? '#29b6f6' : '#e53935');
+        triangle(-5,0, -20,8, -20,-8);
+        
+        // Vele (che si gonfiano)
+        fill(255, 230); noStroke();
+        let pump = this.sail * 6;
+        rect(0, 0, 6 + pump, this.type.w + pump*2, 3);
+        
+        // Barra HP
+        if(!this.isP) {
+            rotate(-this.ang);
+            fill(200,0,0); rect(0, -40, 40, 5);
+            fill(0,200,0); rect(-20 + (20 * (this.hp/this.type.hp)), -40, 40*(this.hp/this.type.hp), 5);
+        }
+        
+        pop();
+    }
+}
+
+/* --- UTILS --- */
+function spawnShip(init) {
+    let d = init ? random(300,800) : random(900,1400);
+    let a = random(TWO_PI);
+    ships.push(new Ship(player.pos.x+cos(a)*d, player.pos.y+sin(a)*d, false));
+}
+function showMessage(txt) {
+    let el = document.getElementById('message');
+    el.innerText = txt; el.style.opacity = 1;
+    setTimeout(()=>el.style.opacity=0, 2500);
+}
+function updateUI() {
+    document.getElementById('shipClass').innerText = player.type.n;
+    document.getElementById('cannons').innerText = player.cannons;
+    document.getElementById('hp').innerText = Math.floor(player.hp);
+    let deg = degrees(wind.heading());
+    document.getElementById('windDir').innerText = (deg>-45&&deg<45)?"E":(deg>45&&deg<135)?"S":(deg>135||deg<-135)?"W":"N";
+}
+function windowResized() { resizeCanvas(windowWidth, windowHeight); }
+</script>
+</body>
+</html>

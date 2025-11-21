@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>Neon Horizon Mobile</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: 'Courier New', Courier, monospace;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        #score-container {
+            color: #00ffff;
+            font-size: 24px;
+            text-shadow: 0 0 10px #00ffff;
+            font-weight: bold;
+        }
+        #start-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            pointer-events: auto;
+            backdrop-filter: blur(5px);
+            z-index: 10;
+        }
+        h1 {
+            color: #ff00cc;
+            font-size: 40px;
+            margin: 0;
+            text-transform: uppercase;
+            text-shadow: 0 0 20px #ff00cc;
+            text-align: center;
+            letter-spacing: 4px;
+        }
+        p {
+            color: #fff;
+            font-size: 16px;
+            margin-top: 10px;
+            opacity: 0.8;
+        }
+        button {
+            margin-top: 30px;
+            padding: 15px 40px;
+            background: transparent;
+            border: 2px solid #00ffff;
+            color: #00ffff;
+            font-size: 20px;
+            font-family: inherit;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            box-shadow: 0 0 15px #00ffff;
+            border-radius: 50px;
+            transition: 0.2s;
+        }
+        button:active {
+            background: #00ffff;
+            color: #000;
+        }
+        #game-over {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+        }
+    </style>
+    
+    <!-- Import Maps to handle Three.js imports cleanly without bundlers -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+</head>
+<body>
+
+    <div id="ui">
+        <div id="score-container">SCORE: <span id="score">0</span></div>
+    </div>
+
+    <div id="start-screen">
+        <div id="start-content">
+            <h1>Neon<br>Horizon</h1>
+            <p>Drag to Steer • Avoid Red</p>
+            <button id="start-btn">IGNITE</button>
+        </div>
+        <div id="game-over">
+            <h1>CRASHED</h1>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <button id="restart-btn">RETRY</button>
+        </div>
+    </div>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+        import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+        import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+
+        // --- CONFIGURATION ---
+        const COLORS = {
+            background: 0x050011,
+            grid: 0xbc13fe, // Purple
+            ship: 0x00ffff, // Cyan
+            obstacle: 0xff0055, // Red/Pink
+            fog: 0x050011
+        };
+
+        let state = {
+            isPlaying: false,
+            score: 0,
+            speed: 0.8,
+            targetX: 0,
+            shipX: 0,
+            time: 0
+        };
+
+        // --- SCENE SETUP ---
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+
+        const scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(COLORS.fog, 0.015);
+        scene.background = new THREE.Color(COLORS.background);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.set(0, 3, 8);
+        camera.lookAt(0, 0, -20);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: "high-performance" });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2)); // Cap pixel ratio for mobile performance
+        container.appendChild(renderer.domElement);
+
+        // --- POST PROCESSING (BLOOM) ---
+        const renderScene = new RenderPass(scene, camera);
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+        bloomPass.threshold = 0;
+        bloomPass.strength = 2.0; // Intense neon glow
+        bloomPass.radius = 0.5;
+
+        const composer = new EffectComposer(renderer);
+        composer.addPass(renderScene);
+        composer.addPass(bloomPass);
+
+        // --- GAME OBJECTS ---
+
+        // 1. The Grid Floor (Infinite movement illusion)
+        const gridHelper = new THREE.GridHelper(200, 100, COLORS.grid, COLORS.grid);
+        gridHelper.position.y = -1;
+        gridHelper.position.z = -50;
+        gridHelper.scale.z = 5;
+        scene.add(gridHelper);
+
+        // Moving Plane under grid to block view
+        const planeGeo = new THREE.PlaneGeometry(200, 500);
+        const planeMat = new THREE.MeshBasicMaterial({ color: 0x08001a });
+        const plane = new THREE.Mesh(planeGeo, planeMat);
+        plane.rotation.x = -Math.PI / 2;
+        plane.position.y = -1.1;
+        scene.add(plane);
+
+        // 2. The Player Ship
+        const shipGroup = new THREE.Group();
+        
+        // Main body
+        const geometry = new THREE.ConeGeometry(0.5, 2, 4);
+        geometry.rotateX(Math.PI / 2);
+        const material = new THREE.MeshStandardMaterial({ 
+            color: 0x000000, 
+            emissive: COLORS.ship,
+            emissiveIntensity: 1,
+            roughness: 0.4,
+            metalness: 0.8
+        });
+        const shipMesh = new THREE.Mesh(geometry, material);
+        shipGroup.add(shipMesh);
+
+        // Engine Glow (Particles)
+        const engineGeo = new THREE.BufferGeometry();
+        const engineMat = new THREE.PointsMaterial({ color: 0x00ffff, size: 0.2, transparent: true, opacity: 0.8 });
+        const engineParticles = new THREE.Points(engineGeo, engineMat);
+        // We will animate this later
+        shipGroup.add(engineParticles);
+
+        scene.add(shipGroup);
+
+        // 3. Retro Sun
+        const sunGeo = new THREE.CircleGeometry(20, 32);
+        const sunMat = new THREE.MeshBasicMaterial({ color: 0xff00cc }); // Solid color to interact with bloom
+        const sun = new THREE.Mesh(sunGeo, sunMat);
+        sun.position.set(0, 10, -100);
+        scene.add(sun);
+
+        // 4. Lighting
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+        
+        const shipLight = new THREE.PointLight(COLORS.ship, 2, 20);
+        shipLight.position.set(0, 1, 0);
+        shipGroup.add(shipLight);
+
+        // --- OBSTACLE MANAGER ---
+        const obstacleGeo = new THREE.BoxGeometry(1.5, 10, 1.5);
+        const obstacleMat = new THREE.MeshStandardMaterial({ 
+            color: 0x000000, 
+            emissive: COLORS.obstacle, 
+            emissiveIntensity: 2 
+        });
+        
+        const obstacles = [];
+        const poolSize = 10; // Keep low for mobile
+
+        for(let i=0; i<poolSize; i++){
+            const mesh = new THREE.Mesh(obstacleGeo, obstacleMat);
+            mesh.position.set(0, -20, 0); // Hide initially
+            scene.add(mesh);
+            obstacles.push({ mesh: mesh, active: false });
+        }
+
+        function spawnObstacle() {
+            if(!state.isPlaying) return;
+
+            // Find inactive obstacle
+            const obj = obstacles.find(o => !o.active);
+            if(obj) {
+                obj.active = true;
+                // Random X position (-6 to 6)
+                obj.mesh.position.x = (Math.random() * 14) - 7;
+                obj.mesh.position.y = 0; // Ground level
+                obj.mesh.position.z = -100; // Far away
+                
+                // Random scale variation
+                obj.mesh.scale.y = 0.5 + Math.random() * 1.5;
+            }
+            
+            // Spawn faster as speed increases
+            const nextSpawn = Math.max(300, 1500 - (state.speed * 500));
+            setTimeout(spawnObstacle, nextSpawn);
+        }
+
+        // --- CONTROLS (TOUCH) ---
+        
+        const handleInput = (x) => {
+            // Normalize x from screen width (0 to width) to (-1 to 1)
+            const ndc = (x / window.innerWidth) * 2 - 1;
+            // Map to play area (-7 to 7)
+            state.targetX = ndc * 7;
+        };
+
+        window.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // Stop scrolling
+            handleInput(e.touches[0].clientX);
+        }, { passive: false });
+
+        window.addEventListener('mousemove', (e) => {
+            if(e.buttons === 1) handleInput(e.clientX);
+        });
+        
+        window.addEventListener('touchstart', (e) => {
+             handleInput(e.touches[0].clientX);
+        }, { passive: false });
+
+
+        // --- GAME LOGIC ---
+
+        function startGame() {
+            state.isPlaying = true;
+            state.score = 0;
+            state.speed = 0.8;
+            state.time = 0;
+            state.shipX = 0;
+            state.targetX = 0;
+
+            document.getElementById('score').innerText = '0';
+            document.getElementById('start-content').style.display = 'none';
+            document.getElementById('game-over').style.display = 'none';
+            document.getElementById('start-screen').style.display = 'none';
+
+            // Reset obstacles
+            obstacles.forEach(o => {
+                o.active = false;
+                o.mesh.position.y = -50;
+            });
+
+            spawnObstacle();
+        }
+
+        function gameOver() {
+            state.isPlaying = false;
+            document.getElementById('start-screen').style.display = 'flex';
+            document.getElementById('start-content').style.display = 'none';
+            document.getElementById('game-over').style.display = 'flex';
+            document.getElementById('final-score').innerText = Math.floor(state.score);
+        }
+
+        function update(delta) {
+            state.time += delta;
+
+            // 1. Ship Movement (Lerp for smoothness)
+            state.shipX += (state.targetX - state.shipX) * 10 * delta;
+            shipGroup.position.x = state.shipX;
+            
+            // Bank effect (roll) based on movement
+            shipGroup.rotation.z = -(state.targetX - state.shipX) * 1.5;
+            // Bobbing effect
+            shipGroup.position.y = Math.sin(state.time * 5) * 0.2;
+
+            // 2. Environment Animation
+            // Move grid texture visually by moving the helper z
+            gridHelper.position.z += state.speed;
+            if(gridHelper.position.z > 0) gridHelper.position.z = -50;
+
+            // Sun movement (parallax)
+            sun.position.x = state.shipX * 0.1;
+
+            // 3. Obstacles Logic
+            obstacles.forEach(obj => {
+                if(obj.active) {
+                    obj.mesh.position.z += state.speed * 60 * delta * 2; // Move towards camera
+
+                    // Collision detection
+                    const dx = obj.mesh.position.x - shipGroup.position.x;
+                    const dz = obj.mesh.position.z - shipGroup.position.z;
+                    const dist = Math.sqrt(dx*dx + dz*dz);
+
+                    if(dist < 1.5) {
+                        gameOver();
+                    }
+
+                    // Reset if passed camera
+                    if(obj.mesh.position.z > 10) {
+                        obj.active = false;
+                        obj.mesh.position.y = -50;
+                        state.score += 10;
+                        document.getElementById('score').innerText = Math.floor(state.score);
+                        
+                        // Increase difficulty slightly
+                        state.speed += 0.005;
+                    }
+                }
+            });
+        }
+
+        // --- RENDER LOOP ---
+        const clock = new THREE.Clock();
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const delta = clock.getDelta();
+
+            if(state.isPlaying) {
+                update(delta);
+            } else {
+                // Idle animation
+                gridHelper.position.z += 0.1;
+                if(gridHelper.position.z > 0) gridHelper.position.z = -50;
+            }
+
+            composer.render();
+        }
+
+        // Handle Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            composer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // UI Binding
+        document.getElementById('start-btn').addEventListener('click', startGame);
+        document.getElementById('restart-btn').addEventListener('click', startGame);
+
+        // Start loop
+        animate();
+
+    </script>
+</body>
+</html>
