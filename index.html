@@ -5,36 +5,37 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>One Prompt Games | Federicowitz</title>
     <link rel="stylesheet" href="style.css">
-    <!-- Font moderno (Inter o Roboto Mono per tocco dev) -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Font Tech: Space Grotesk per titoli, JetBrains Mono per codice -->
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;600&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <!-- Three.js da CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-    <header class="hero">
-        <div class="container">
-            <p class="dev-tag">Developed by <span class="accent">Federicowitz</span></p>
-            <h1>One Prompt Games</h1>
-            <p class="subtitle">
-                Il mio <em>guilty pleasure</em>. <br>
-                Creare giochi e simulazioni con l'IA per testarne limiti e potenzialità.
-            </p>
-            <div class="tech-stack">
-                <span>HTML5</span>
-                <span>Pure JS</span>
-                <span>AI Generated</span>
+    <!-- Canvas per l'animazione Three.js -->
+    <div id="canvas-container"></div>
+
+    <div class="overlay">
+        <header class="hero">
+            <div class="glitch-wrapper">
+                <h1 class="glitch" data-text="One Prompt Games">One Prompt Games</h1>
             </div>
-        </div>
-    </header>
+            <p class="subtitle">
+                <span class="console-prefix">></span> AI Experiments by <span class="accent">Federicowitz</span>
+            </p>
+            <p class="description">Guilty Pleasure: Pushing AI limits, one prompt at a time.</p>
+        </header>
 
-    <main class="container">
-        <div id="games-grid" class="grid">
-            <!-- Qui verranno inseriti i giochi dinamicamente da JS -->
-        </div>
-    </main>
+        <main>
+            <div id="games-grid" class="grid">
+                <!-- Iniezione dinamica qui -->
+            </div>
+        </main>
 
-    <footer>
-        <p>&copy; 2025 Federicowitz. Code is Art.</p>
-    </footer>
+        <footer>
+            <p>Developed via Human-AI Symbiosis</p>
+        </footer>
+    </div>
 
     <script src="main.js"></script>
 </body>
