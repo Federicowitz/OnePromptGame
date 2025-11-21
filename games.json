@@ -2,25 +2,31 @@
   {
     "id": "game0",
     "title": "Neon Horizon",
-    "description": "Classico giochino retro stile tron dove bisogna evitare i cristalli luminosi. Voto: 2/10",
+    "description": "[Mobile][PC] Classico gioco retro stile tron dove bisogna evitare i cristalli luminosi. Sto cambiando idea, può essere divertente Voto: 2/10",
     "date": "2023-10-01"
   },
   {
     "id": "game1",
     "title": "Postal truck",
-    "description": "La città, il traffico, tutto è caos. Evita le auto e consegna quanti più pacchi possibili. Un pochettino difficile la guida, grafica accettabile. Voto 2.5/10",
+    "description": "[Mobile] La città, il traffico, tutto è caos. Evita le auto e consegna quanti più pacchi possibili. Difficile la guida, grafica accettabile. Voto 2.5/10",
     "date": "2023-10-15"
   },
   {
     "id": "game2",
     "title": "Sailing Dread",
-    "description": "Veleggia nell'oceano infinito e migliora il tuo veliero. Fai attenzione alle bandiere delle altre navi. I nemici con più cannoni ti attaccheranno, mentre quelli con meno cannoni proveranno a fuggire, e gli amici.. beh non c'è onore tra ladri. Voto 4.5/10",
+    "description": "[Mobile] Veleggia nell'oceano infinito e migliora il tuo veliero. Fai attenzione alle bandiere delle altre navi. I nemici con più cannoni ti attaccheranno, mentre i più deboli proveranno a fuggire, e gli amici.. beh non c'è onore tra ladri. Voto 4.5/10",
     "date": "2023-10-15"
   },
   {
     "id": "game3",
     "title": "Poortal 2D",
-    "description": "Singolo prompt. Altissimo potenziale. Voto 5/10",
+    "description": "[Mobile][PC] Singolo prompt. Altissimo potenziale. Voto 5/10",
+    "date": "2023-10-15"
+  },
+  {
+    "id": "game4",
+    "title": "Browser Scrolls: Skyreign",
+    "description": "[PC] Test con 3 prompt per fare un clone di skyrim, simpatico con effetti sonori. C'è da lavorare. Voto 4.5/10",
     "date": "2023-10-15"
   }
 ]
