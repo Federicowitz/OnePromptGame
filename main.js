@@ -2,6 +2,122 @@ document.addEventListener('DOMContentLoaded', () => {
     loadGames();
     initThreeJS();
 });
+function initThreeJS() {
+    const container = document.getElementById('canvas-container');
+
+    // 1. SETUP SCENA
+    const scene = new THREE.Scene();
+    // Aggiungiamo una nebbia nera per fondere l'oggetto in lontananza se serve
+    scene.fog = new THREE.FogExp2(0x000000, 0.03);
+
+    const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 1000);
+    // Posizione camera: abbastanza vicina per vedere i dettagli
+    camera.position.z = 10; 
+
+    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(window.devicePixelRatio);
+    container.innerHTML = ''; // Pulisce vecchi canvas se presenti
+    container.appendChild(renderer.domElement);
+
+    // 2. CREAZIONE DELL'OGGETTO "FLUIDO"
+    // Usiamo un Icosaedro con alto dettaglio per farlo sembrare una sfera
+    // Parametri: Raggio 3, Dettaglio 5 (più è alto più è liscio, ma pesante per mobile. 5 è un buon compromesso)
+    const geometry = new THREE.IcosahedronGeometry(3.5, 4); 
+    
+    // Materiale "Plastica Nera Lucida"
+    const material = new THREE.MeshStandardMaterial({
+        color: 0x111111,     // Quasi nero
+        roughness: 0.1,      // Molto liscio (0 = specchio, 1 = opaco)
+        metalness: 0.6,      // Un po' metallico per i riflessi
+        flatShading: false,  // Shading morbido
+    });
+
+    const blob = new THREE.Mesh(geometry, material);
+    scene.add(blob);
+
+    // Salviamo la posizione originale dei vertici per poterli deformare
+    const originalPositions = geometry.attributes.position.array.slice();
+    
+    // 3. LUCI (NEON VIBES)
+    // Luce ambientale debole per non avere il nero totale cieco
+    const ambientLight = new THREE.AmbientLight(0x222222); 
+    scene.add(ambientLight);
+
+    // Luce 1: Neon Ciano (Azzurro)
+    const light1 = new THREE.PointLight(0x00ffff, 2, 50);
+    scene.add(light1);
+
+    // Luce 2: Neon Viola (Magenta)
+    const light2 = new THREE.PointLight(0xff00ff, 2, 50);
+    scene.add(light2);
+
+    // Helper per muovere le luci
+    const clock = new THREE.Clock();
+
+    // 4. ANIMAZIONE
+    const animate = () => {
+        const time = clock.getElapsedTime();
+        const positions = geometry.attributes.position; // Accesso ai vertici
+
+        // -- DEFORMAZIONE (IL "MODELLAMENTO") --
+        // Cicliamo attraverso i vertici per spostarli
+        for (let i = 0; i < positions.count; i++) {
+            // Prendiamo le coordinate originali
+            const ox = originalPositions[i * 3];
+            const oy = originalPositions[i * 3 + 1];
+            const oz = originalPositions[i * 3 + 2];
+
+            // Creiamo un "rumore" basato su seno e coseno e tempo
+            // Questo simula l'effetto liquido senza librerie pesanti
+            const offset = 
+                Math.sin(ox * 0.5 + time * 1.2) * 0.4 + 
+                Math.cos(oy * 0.3 + time * 1.5) * 0.4 + 
+                Math.sin(oz * 0.5 + time * 0.5) * 0.2;
+
+            // Normalizziamo il vettore (direzione dal centro)
+            const dist = Math.sqrt(ox*ox + oy*oy + oz*oz);
+            const nx = ox / dist;
+            const ny = oy / dist;
+            const nz = oz / dist;
+
+            // Applichiamo la deformazione lungo la normale (gonfia/sgonfia)
+            const scale = 1 + offset * 0.2; // 0.2 è l'intensità della deformazione
+
+            positions.setXYZ(i, ox * scale, oy * scale, oz * scale);
+        }
+        
+        // Diciamo a Three.js che i vertici sono cambiati
+        positions.needsUpdate = true;
+        geometry.computeVertexNormals(); // Ricalcola le luci sulla nuova forma
+
+        // -- MOVIMENTO LUCI --
+        // Le luci orbitano attorno al blob
+        light1.position.x = Math.sin(time * 0.7) * 8;
+        light1.position.y = Math.cos(time * 0.5) * 8;
+        light1.position.z = Math.sin(time * 0.3) * 8;
+
+        light2.position.x = Math.sin(time * 0.8 + 2) * -8; // +2 per sfasare
+        light2.position.y = Math.cos(time * 0.6 + 2) * -8;
+        light2.position.z = Math.cos(time * 0.4 + 2) * 8;
+
+        // Rotazione lenta dell'intero oggetto
+        blob.rotation.y += 0.002;
+        blob.rotation.z += 0.001;
+
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+    };
+
+    // Resize Handler
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+}
 
 function loadGames() {
     const grid = document.getElementById('games-grid');
@@ -33,82 +149,3 @@ function loadGames() {
 }
 
 // --- PARTE 2: THREE.JS BACKGROUND (PARTICLE FIELD) ---
-function initThreeJS() {
-    const container = document.getElementById('canvas-container');
-    
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    
-    // Avviciniamo un po' la camera su mobile per vedere meglio le particelle
-    camera.position.z = window.innerWidth < 768 ? 25 : 30;
-
-    const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio); // Importante per schermi nitidi
-    container.appendChild(renderer.domElement);
-
-    const particlesGeometry = new THREE.BufferGeometry();
-    const particlesCount = 1500;
-    const posArray = new Float32Array(particlesCount * 3);
-
-    for(let i = 0; i < particlesCount * 3; i++) {
-        posArray[i] = (Math.random() - 0.5) * 100; 
-    }
-
-    particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
-
-    // Aumentiamo size se siamo su mobile
-    const isMobile = window.innerWidth < 768;
-    
-    const material = new THREE.PointsMaterial({
-        size: isMobile ? 0.25 : 0.15, // Più grandi su mobile
-        color: 0x00f3ff,
-        transparent: true,
-        opacity: 0.8,
-    });
-
-    const particlesMesh = new THREE.Points(particlesGeometry, material);
-    scene.add(particlesMesh);
-
-    // Gestione Input (Mouse + Touch)
-    let mouseX = 0;
-    let mouseY = 0;
-    const windowHalfX = window.innerWidth / 2;
-    const windowHalfY = window.innerHeight / 2;
-
-    // Desktop
-    document.addEventListener('mousemove', (event) => {
-        mouseX = (event.clientX - windowHalfX);
-        mouseY = (event.clientY - windowHalfY);
-    });
-
-    // Mobile (Touch)
-    document.addEventListener('touchmove', (event) => {
-        if (event.touches.length > 0) {
-            mouseX = (event.touches[0].clientX - windowHalfX);
-            mouseY = (event.touches[0].clientY - windowHalfY);
-        }
-    }, { passive: true });
-
-    // Resize
-    window.addEventListener('resize', () => {
-        camera.aspect = window.innerWidth / window.innerHeight;
-        camera.updateProjectionMatrix();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    const animate = () => {
-        // Rotazione costante di base (così si muovono anche senza toccare)
-        particlesMesh.rotation.y += 0.002; 
-        particlesMesh.rotation.x += 0.001;
-
-        // Interazione aggiuntiva
-        particlesMesh.rotation.y += 0.05 * (mouseX * 0.001 - particlesMesh.rotation.y);
-        particlesMesh.rotation.x += 0.05 * (mouseY * 0.001 - particlesMesh.rotation.x);
-
-        renderer.render(scene, camera);
-        requestAnimationFrame(animate);
-    };
-
-    animate();
-}
